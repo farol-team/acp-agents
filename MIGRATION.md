@@ -72,7 +72,7 @@ memory on an agent that cannot hold it.
 
 ## Phase 3 — WorkRoom (`workroom/desktop`) — **done**
 
-Branch `acp/shared-crate` (PR #294): +494 −2142. `acp.rs` keeps a window's
+Branch `flow/i295-…` (PR #296): +494 −2142. `acp.rs` keeps a window's
 bookkeeping, `path.rs` is gone, and the frontend stopped parsing frames — one
 `acp://event` stream replaced three listeners and the translation that read
 them. The agent catalogue in `src/agents/catalog.ts` is the one piece left.

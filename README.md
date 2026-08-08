@@ -60,7 +60,7 @@ The two crates do not depend on each other. `acp-agents` decides *what* to run;
 `0.2` — extracted from three working implementations and adopted by all three:
 [gilb](https://github.com/gilb-ai/gilb-recorder/pull/60),
 [OpenTag](https://github.com/farol-team/opentag/pull/33),
-[WorkRoom](https://github.com/farol-team/workroom/pull/294). 71 tests here;
+[WorkRoom](https://github.com/farol-team/workroom/pull/296). 71 tests here;
 4 344 lines of duplicated client and its specs deleted across the three
 against 1 280 written, so about 3 000 net. Pin by tag while the API settles.
 

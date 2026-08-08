@@ -763,3 +763,44 @@ fn an_mcp_server_carries_its_headers_as_a_list() {
     assert_eq!(server["headers"][0]["name"], "Authorization");
     assert_eq!(server["headers"][0]["value"], "Bearer t0ken");
 }
+
+/// The JSON a product hands to its own frontend is spelled the way the
+/// protocol spells it, so a UI that already speaks ACP keeps its types.
+#[test]
+fn an_event_is_rendered_the_way_the_protocol_spells_it() {
+    let event = Event {
+        session: Some("s-1".into()),
+        kind: EventKind::Tool {
+            title: "Read(a.rs)".into(),
+            kind: "read".into(),
+            status: Some("pending".into()),
+            update: true,
+        },
+    };
+    let json = event.to_json();
+
+    assert_eq!(json["kind"], "tool");
+    assert_eq!(json["session"], "s-1");
+    assert_eq!(json["toolKind"], "read");
+    assert_eq!(json["update"], true);
+}
+
+#[test]
+fn a_session_option_keeps_the_agents_own_field_names() {
+    let option = SessionOption {
+        id: "model".into(),
+        name: "Model".into(),
+        category: "model".into(),
+        kind: "select".into(),
+        current: "haiku".into(),
+        choices: vec![SessionChoice {
+            value: "haiku".into(),
+            name: "Haiku".into(),
+        }],
+    };
+    let json = option.to_json();
+
+    assert_eq!(json["type"], "select", "as `session/new` spells it");
+    assert_eq!(json["currentValue"], "haiku");
+    assert_eq!(json["options"][0]["value"], "haiku");
+}

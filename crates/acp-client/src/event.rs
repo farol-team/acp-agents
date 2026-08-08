@@ -447,6 +447,115 @@ pub(crate) fn turn_outcome(reply: Value) -> TurnOutcome {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The JSON a product hands to its own frontend
+// ---------------------------------------------------------------------------
+//
+// Written out by hand rather than derived, and deliberately spelled the way
+// the protocol spells it: a UI that already speaks ACP keeps its types, and
+// nothing here bends the Rust API to suit one product's renderer.
+
+impl Event {
+    pub fn to_json(&self) -> Value {
+        let mut value = self.kind.to_json();
+        if let (Some(map), Some(session)) = (value.as_object_mut(), &self.session) {
+            map.insert("session".into(), Value::String(session.clone()));
+        }
+        value
+    }
+}
+
+impl EventKind {
+    pub fn to_json(&self) -> Value {
+        match self {
+            EventKind::Text(text) => serde_json::json!({ "kind": "text", "text": text }),
+            EventKind::Thought(text) => serde_json::json!({ "kind": "thought", "text": text }),
+            EventKind::Tool {
+                title,
+                kind,
+                status,
+                update,
+            } => serde_json::json!({
+                "kind": "tool", "title": title, "toolKind": kind,
+                "status": status, "update": update,
+            }),
+            EventKind::Plan(entries) => serde_json::json!({
+                "kind": "plan",
+                "entries": entries.iter().map(PlanEntry::to_json).collect::<Vec<_>>(),
+            }),
+            EventKind::Usage { used, size, cost } => serde_json::json!({
+                "kind": "usage", "used": used, "size": size,
+                "cost": cost.as_ref().map(Cost::to_json),
+            }),
+            EventKind::Config(options) => serde_json::json!({
+                "kind": "config",
+                "options": options.iter().map(SessionOption::to_json).collect::<Vec<_>>(),
+            }),
+            EventKind::Permission(request) => serde_json::json!({
+                "kind": "permission", "request": request.to_json(),
+            }),
+            EventKind::Other { kind } => serde_json::json!({ "kind": "other", "label": kind }),
+            EventKind::Closed { diagnostics } => serde_json::json!({
+                "kind": "closed", "diagnostics": diagnostics,
+            }),
+        }
+    }
+}
+
+impl PlanEntry {
+    pub fn to_json(&self) -> Value {
+        serde_json::json!({
+            "content": self.content, "priority": self.priority, "status": self.status,
+        })
+    }
+}
+
+impl Cost {
+    pub fn to_json(&self) -> Value {
+        serde_json::json!({ "amount": self.amount, "currency": self.currency })
+    }
+}
+
+impl SessionChoice {
+    pub fn to_json(&self) -> Value {
+        serde_json::json!({ "value": self.value, "name": self.name })
+    }
+}
+
+impl SessionOption {
+    /// Spelled as `session/new` spelled it, so a client that already reads the
+    /// agent's own `configOptions` needs no second shape for ours.
+    pub fn to_json(&self) -> Value {
+        serde_json::json!({
+            "id": self.id,
+            "name": self.name,
+            "category": self.category,
+            "type": self.kind,
+            "currentValue": self.current,
+            "options": self.choices.iter().map(SessionChoice::to_json).collect::<Vec<_>>(),
+        })
+    }
+}
+
+impl PermissionRequest {
+    /// Everything a person needs to answer it, and the id their answer must
+    /// quote back. The connection behind it stays here — an answer goes
+    /// through [`PermissionRequest::answer`], never through a frontend
+    /// inventing a frame.
+    pub fn to_json(&self) -> Value {
+        serde_json::json!({
+            "id": self.id,
+            "session": self.session,
+            "title": self.title,
+            "command": self.command,
+            "toolKind": self.tool_kind,
+            "options": self.options.iter().map(|o| serde_json::json!({
+                "optionId": o.id, "name": o.name, "kind": o.kind,
+            })).collect::<Vec<_>>(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

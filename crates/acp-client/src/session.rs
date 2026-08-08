@@ -18,6 +18,14 @@ pub struct SessionOpts {
     /// MCP servers to mount, in the protocol's own shape — see
     /// [`crate::http_mcp_server`], because getting it wrong is silent.
     pub mcp_servers: Vec<Value>,
+    /// Deliver the history a `session/load` replays instead of suppressing it.
+    ///
+    /// Off by default, because the replay is not news: whoever asked to resume
+    /// already has the conversation, and passing it through makes every
+    /// resumed turn repeat the whole thread before answering. On, it is the
+    /// protocol's own way to read a session back — which is how a transcript
+    /// is taken from an agent that has no exporter.
+    pub replay: bool,
     /// Knobs to apply right after the session opens, as `(configId, value)` —
     /// e.g. `("model", "haiku")`. Best-effort by design: the option set
     /// differs per agent, and a knob that does not exist must not cost a
@@ -33,6 +41,12 @@ impl SessionOpts {
 
     pub fn mcp(mut self, server: Value) -> Self {
         self.mcp_servers.push(server);
+        self
+    }
+
+    /// Ask for the replayed history to be delivered — see [`SessionOpts::replay`].
+    pub fn replaying(mut self) -> Self {
+        self.replay = true;
         self
     }
 

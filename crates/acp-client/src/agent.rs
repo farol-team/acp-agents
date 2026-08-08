@@ -378,7 +378,7 @@ impl Agent {
     /// flight. Without that, every resumed turn says the entire history back
     /// before answering it.
     pub async fn load_session(&self, id: &str, opts: SessionOpts) -> Result<Session> {
-        self.conn.replay_guard(id, true).await;
+        self.conn.replay_guard(id, !opts.replay).await;
         let reply = self
             .conn
             .request(

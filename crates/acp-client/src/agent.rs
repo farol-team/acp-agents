@@ -281,7 +281,9 @@ impl Agent {
                 // Whatever it said on the way down is the only thing that
                 // explains it — "cannot start" covers only a binary that was
                 // never there.
-                let tail = conn.diagnostics().await;
+                let tail = conn
+                    .diagnostics_settled(std::time::Duration::from_millis(500))
+                    .await;
                 return Err(Error::Handshake(if tail.is_empty() {
                     err.to_string()
                 } else {

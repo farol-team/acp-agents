@@ -60,6 +60,20 @@ fn drain(rx: &mut mpsc::Receiver<Event>) -> Vec<EventKind> {
     seen
 }
 
+/// Wait for something to become true, rather than for a number of
+/// milliseconds. A sleep long enough on the machine a test was written on is a
+/// sleep too short on the machine it runs on.
+async fn until(what: &str, mut ready: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !ready() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting: {what}"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
 fn text_of(events: &[EventKind]) -> String {
     events
         .iter()
@@ -301,7 +315,10 @@ sleep 5
     );
     assert!(err.to_string().contains("session/prompt"));
 
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    until("the cancel to reach the agent", || {
+        std::fs::read_to_string(&seen).is_ok_and(|line| !line.trim().is_empty())
+    })
+    .await;
     let cancel: serde_json::Value =
         serde_json::from_str(std::fs::read_to_string(&seen).unwrap().trim()).unwrap();
     assert_eq!(cancel["method"], "session/cancel");
@@ -310,6 +327,12 @@ sleep 5
 
 /// A turn that timed out keeps streaming on the agent's side: its late words
 /// must not land in the next turn's answer.
+///
+/// Driven by the messages rather than by sleeps: the fake agent says nothing
+/// until the cancel arrives, so the first turn is abandoned on its own silence
+/// and everything after it happens as fast as the pipe allows. Timed with
+/// sleeps instead, the second turn raced the first one's deadline — and lost
+/// on macOS, where it landed a few milliseconds the wrong side of it.
 #[tokio::test]
 async fn late_chunks_do_not_leak_into_the_next_turn() {
     let dir = tempfile::tempdir().unwrap();
@@ -317,10 +340,9 @@ async fn late_chunks_do_not_leak_into_the_next_turn() {
         &dir,
         &format!(
             r#"{HANDSHAKE}
-sleep 1
+read_line   # session/cancel — the client gave up on the turn above
 printf '{{"jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"s-1","update":{{"sessionUpdate":"agent_message_chunk","content":{{"type":"text","text":"stale"}}}}}}}}\n'
-printf '{{"jsonrpc":"2.0","id":3,"result":{{"stopReason":"end_turn"}}}}\n'
-read_line   # session/cancel for the abandoned turn
+printf '{{"jsonrpc":"2.0","id":3,"result":{{"stopReason":"cancelled"}}}}\n'
 read_line   # session/prompt #2
 printf '{{"jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"s-1","update":{{"sessionUpdate":"agent_message_chunk","content":{{"type":"text","text":"fresh"}}}}}}}}\n'
 printf '{{"jsonrpc":"2.0","id":4,"result":{{"stopReason":"end_turn"}}}}\n'
@@ -329,9 +351,15 @@ sleep 5
         ),
     );
 
-    let (agent, mut events) =
-        started_with(config(bin).deadlines(Deadlines::interactive(Duration::from_millis(500))))
-            .await;
+    let (agent, mut events) = started_with(config(bin).deadlines(Deadlines {
+        startup: Duration::from_secs(5),
+        // Short enough that the silent first turn is given up on quickly,
+        // generous enough that the second turn is never judged by a clock.
+        idle: Duration::from_millis(300),
+        hard: Duration::from_secs(5),
+        tick: Duration::from_millis(25),
+    }))
+    .await;
     let session = agent.new_session(SessionOpts::default()).await.unwrap();
 
     assert!(
@@ -410,8 +438,8 @@ exit 0
 
     let (agent, _events) = started(bin).await;
     let session = agent.new_session(SessionOpts::default()).await.unwrap();
-    // Let the agent's exit settle so the write below is what fails.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // The write below is what must fail, so the exit has to have landed first.
+    until("the agent to exit", || !agent.alive()).await;
 
     assert!(session.prompt("hello").await.is_err());
     assert_eq!(
@@ -669,13 +697,11 @@ async fn a_failed_handshake_takes_the_whole_process_group() {
         .parse()
         .expect("a pid");
 
-    // The signal travels the group; give the kernel a moment to deliver it.
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    let alive = unsafe { libc::kill(pid, 0) } == 0;
-    assert!(
-        !alive,
-        "the grandchild outlived the failed handshake — this is the leak"
-    );
+    // The signal travels the group, and the kernel delivers it when it does.
+    until("the grandchild to be signalled", || {
+        (unsafe { libc::kill(pid, 0) }) != 0
+    })
+    .await;
 
     let left = std::fs::read_to_string(&registry).unwrap_or_default();
     assert!(

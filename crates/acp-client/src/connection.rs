@@ -51,6 +51,11 @@ pub(crate) struct Connection {
     stale: Mutex<HashMap<String, String>>,
     alive: AtomicBool,
     diagnostics: Mutex<VecDeque<String>>,
+    /// False once the agent's stderr has ended — or immediately, when there is
+    /// none to read. What an agent says on its way down arrives on a different
+    /// stream from the one whose silence we notice, so "it failed" can be
+    /// known before "here is why" has been read.
+    stderr_open: AtomicBool,
     deadlines: Deadlines,
     events: mpsc::Sender<Event>,
     policy: PermissionPolicy,
@@ -74,6 +79,7 @@ impl Connection {
             stale: Mutex::new(HashMap::new()),
             alive: AtomicBool::new(true),
             diagnostics: Mutex::new(VecDeque::new()),
+            stderr_open: AtomicBool::new(stderr.is_some()),
             deadlines,
             events,
             policy,
@@ -94,6 +100,7 @@ impl Connection {
                     }
                     tail.push_back(line);
                 }
+                keep.stderr_open.store(false, Ordering::SeqCst);
             });
         }
 
@@ -233,6 +240,20 @@ impl Connection {
 
     pub(crate) async fn diagnostics(&self) -> Vec<String> {
         self.diagnostics.lock().await.iter().cloned().collect()
+    }
+
+    /// The same, once there is nothing more coming — or once `grace` has
+    /// passed, for an agent that is still running and still talking.
+    ///
+    /// Worth the wait exactly where it is used: an agent that failed said why
+    /// on a stream nobody was waiting on, and reporting the failure before
+    /// reading it is how "it exited" reaches a person with no reason attached.
+    pub(crate) async fn diagnostics_settled(&self, grace: std::time::Duration) -> Vec<String> {
+        let deadline = Instant::now() + grace;
+        while self.stderr_open.load(Ordering::SeqCst) && Instant::now() < deadline {
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        self.diagnostics().await
     }
 
     pub(crate) fn alive(&self) -> bool {

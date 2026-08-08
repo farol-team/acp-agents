@@ -337,6 +337,14 @@ impl Agent {
         self.conn.alive()
     }
 
+    /// The process id, while there is one. For a product that shows it, and
+    /// for a test that needs to kill the agent from outside — a death this
+    /// client's own `stop` has no part in, and the only kind the reader has to
+    /// notice by itself.
+    pub fn pid(&self) -> Option<u32> {
+        self._child.child.id()
+    }
+
     /// The last lines the agent wrote to stderr, oldest first.
     pub async fn diagnostics(&self) -> Vec<String> {
         self.conn.diagnostics().await

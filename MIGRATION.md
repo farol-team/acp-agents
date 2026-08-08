@@ -5,7 +5,10 @@ it keeps, and what it gains by switching — in the order the switches should
 happen, smallest delta first, so the API is validated before the widest
 surface commits to it.
 
-## Phase 1 — gilb (`gilb-recorder`, `crates/gilb-assist-acp`)
+## Phase 1 — gilb (`gilb-recorder`, `crates/gilb-assist-acp`) — **done**
+
+Branch `acp/shared-crate`: −1125 lines, 11 tests, the app's catalogue and
+resolution now come from `acp-agents`.
 
 The seed. Its shape survives almost unchanged, which is why it goes first.
 
@@ -38,7 +41,11 @@ preferences, what the settings panel shows, and the `GILB_ASSIST_*` overrides
 **Gains:** string ids, stderr diagnostics on a failed handshake, the login
 hint, per-session replay suppression.
 
-## Phase 2 — OpenTag (`slack/runner/crates/opentag-core`)
+## Phase 2 — OpenTag (`slack/runner/crates/opentag-core`) — **done**
+
+Branch `flow/acp-shared-crate`: −291 lines net, `acp.rs` and `agents.rs`
+gone, four latent bugs closed by the move (integer-only ids, no prompt
+deadline, discarded stderr, orphaned process groups).
 
 Biggest bug payoff, no UI, no test-first gate.
 

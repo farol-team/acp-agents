@@ -325,6 +325,16 @@ mod tests {
         }
     }
 
+    /// Ids are persisted in products' preferences and matched on; two entries
+    /// sharing one would make somebody's saved choice ambiguous.
+    #[test]
+    fn harness_ids_are_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for h in HARNESSES {
+            assert!(seen.insert(h.id), "duplicate harness id `{}`", h.id);
+        }
+    }
+
     #[test]
     fn the_adapters_are_pinned_by_value() {
         // These move when vendors move, and a silent drift is a feature that

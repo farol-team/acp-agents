@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/acp-client", "crates/acp-agents"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/farol-team/acp-agents"
+authors = ["Farol Labs"]
+
+[workspace.dependencies]
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["process", "io-util", "sync", "rt", "macros", "time"] }
+tracing = "0.1"

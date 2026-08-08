@@ -196,6 +196,19 @@ impl Harness {
         })
     }
 
+    /// What speaks ACP for this agent once it is on the machine, and the
+    /// arguments that put it in ACP mode.
+    ///
+    /// Static: it answers "what would run", which is what a config file or a
+    /// settings panel needs. [`launch`] answers "what can run right now", which
+    /// needs the machine.
+    pub fn command(&self) -> (&'static str, &'static [&'static str]) {
+        match self.adapter_bin {
+            Some(names) => (names[0], &[]),
+            None => (self.cli[0], self.cli_acp_args),
+        }
+    }
+
     /// The one command that would install this agent, into a prefix the
     /// product owns rather than the person's own node installation. The prefix
     /// is quoted because an app data directory on macOS has a space in it, and

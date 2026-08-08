@@ -40,6 +40,10 @@ pub enum EventKind {
         kind: String,
         /// `pending`, `in_progress`, `completed`, `failed`, when it says.
         status: Option<String>,
+        /// False for the call, true for a later change to one already
+        /// announced. A product that renders the two the same way says
+        /// everything twice.
+        update: bool,
     },
     Plan(Vec<PlanEntry>),
     Usage {
@@ -287,6 +291,7 @@ pub(crate) fn map_update(params: &Value) -> Option<EventKind> {
                 .and_then(Value::as_str)
                 .or_else(|| update.get("kind").and_then(Value::as_str))?;
             Some(EventKind::Tool {
+                update: kind == "tool_call_update",
                 title: title.to_string(),
                 kind: update
                     .get("kind")
@@ -488,6 +493,7 @@ mod tests {
             title,
             kind,
             status,
+            update: is_update,
         }) = update(json!({
             "sessionUpdate": "tool_call", "title": "Read(src/main.rs)",
             "kind": "read", "status": "pending"
@@ -500,6 +506,15 @@ mod tests {
             ("Read(src/main.rs)", "read")
         );
         assert_eq!(status.as_deref(), Some("pending"));
+        assert!(!is_update, "this is the call itself");
+
+        // The same title arriving again is a change to a step already shown,
+        // not a second step — a product that renders both the same way says
+        // everything twice.
+        assert!(matches!(
+            update(json!({ "sessionUpdate": "tool_call_update", "title": "Read(src/main.rs)" })),
+            Some(EventKind::Tool { update: true, .. })
+        ));
     }
 
     #[test]

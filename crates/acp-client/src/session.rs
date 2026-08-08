@@ -67,7 +67,10 @@ impl SessionOpts {
 pub struct Session {
     conn: Arc<Connection>,
     id: String,
-    options: Vec<SessionOption>,
+    /// Behind a lock rather than behind `&mut self`: one agent can hold a
+    /// session per conversation, and a turn that runs for minutes must not
+    /// stop the others from reading — or changing — their own knobs.
+    options: tokio::sync::Mutex<Vec<SessionOption>>,
     reply: Value,
 }
 
@@ -81,7 +84,7 @@ impl Session {
         Self {
             conn,
             id,
-            options,
+            options: tokio::sync::Mutex::new(options),
             reply,
         }
     }
@@ -91,8 +94,8 @@ impl Session {
     }
 
     /// The knobs this session offers, as the agent last stated them.
-    pub fn options(&self) -> &[SessionOption] {
-        &self.options
+    pub async fn options(&self) -> Vec<SessionOption> {
+        self.options.lock().await.clone()
     }
 
     /// The `session/new` or `session/load` reply verbatim, for whatever this
@@ -139,7 +142,7 @@ impl Session {
 
     /// Change one knob. Returns the full updated list, which is what the agent
     /// sends back — so the caller never has to guess what took effect.
-    pub async fn set_config(&mut self, config_id: &str, value: &str) -> Result<&[SessionOption]> {
+    pub async fn set_config(&self, config_id: &str, value: &str) -> Result<Vec<SessionOption>> {
         let reply = self
             .conn
             .request(
@@ -148,10 +151,11 @@ impl Session {
             )
             .await?;
         let updated = session_options(&reply);
+        let mut options = self.options.lock().await;
         if !updated.is_empty() {
-            self.options = updated;
+            *options = updated;
         }
-        Ok(&self.options)
+        Ok(options.clone())
     }
 
     /// Apply a list of knobs in order, skipping any the agent has stopped
@@ -166,12 +170,14 @@ impl Session {
     ///
     /// Nothing here fails: a knob is best-effort, and an agent that has none
     /// simply keeps its own defaults.
-    pub async fn apply(&mut self, wanted: &[(String, String)]) {
+    pub async fn apply(&self, wanted: &[(String, String)]) {
         for (config_id, value) in wanted {
             // An empty option set means the agent said nothing about its
             // knobs — no grounds to second-guess it, so try anyway.
-            let offered =
-                self.options.is_empty() || self.options.iter().any(|o| &o.id == config_id);
+            let offered = {
+                let options = self.options.lock().await;
+                options.is_empty() || options.iter().any(|o| &o.id == config_id)
+            };
             if !offered {
                 debug!(
                     config_id,

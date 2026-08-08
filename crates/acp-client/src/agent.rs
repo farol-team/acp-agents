@@ -366,7 +366,7 @@ impl Agent {
             .ok_or_else(|| Error::Protocol("session/new returned no sessionId".into()))?
             .to_string();
 
-        let mut session = Session::new(self.conn.clone(), id, session_options(&reply), reply);
+        let session = Session::new(self.conn.clone(), id, session_options(&reply), reply);
         session.apply(&opts.config).await;
         Ok(session)
     }
@@ -393,7 +393,7 @@ impl Agent {
         self.conn.replay_guard(id, false).await;
         let reply = reply.map_err(|err| self.with_auth_hint(err))?;
 
-        let mut session = Session::new(
+        let session = Session::new(
             self.conn.clone(),
             id.to_string(),
             session_options(&reply),

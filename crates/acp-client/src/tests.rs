@@ -469,7 +469,11 @@ sleep 5
         !log.contains(r#""configId":"effort""#),
         "effort was withdrawn and must not be asked for: {log}"
     );
-    assert_eq!(session.options().len(), 1, "the session knows what is left");
+    assert_eq!(
+        session.options().await.len(),
+        1,
+        "the session knows what is left"
+    );
 }
 
 /// An agent that never answers a knob must not wedge the session behind a
